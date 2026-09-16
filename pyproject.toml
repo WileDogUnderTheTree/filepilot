@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "filepilot"
+version = "0.1.0"
+description = "文件整理、去重与日志分析 CLI 工具"
+readme = "README.md"
+requires-python = ">=3.10"
+
+[project.scripts]
+filepilot = "filepilot.cli:main"
+
+[tool.setuptools]
+packages = ["filepilot"]

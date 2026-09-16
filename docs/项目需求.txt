@@ -1,0 +1,201 @@
+做一个 FilePilot：本地文件整理、去重与日志分析 CLI 工具。
+主要用 Python 标准库，能把你现在学的东西全部串起来
+
+一句话定位：
+
+用命令行扫描目录，按 JSON 规则分类/重命名/移动文件；检测重复文件；分析日志；生成报告；支持 dry-run 和 undo。
+
+---
+
+1. 为什么这个项目适合你
+
+它天然覆盖：
+
+知识点 项目落点
+面向对象 FileItem、Rule 抽象基类、Action 策略、Reporter 接口
+文件操作 pathlib、shutil、hashlib、json、os
+正则表达式 文件名匹配、重命名模板、日志解析
+闭包 规则工厂、重试装饰器、计时装饰器
+线程 扫描目录、读取小文件、日志读取
+进程 大文件哈希计算、压缩
+协程 asyncio.Queue 做日志分析生产者消费者
+异常处理 自定义异常、错误收集、重试、退出码
+GitHub 发布 README、示例配置、测试、CI、Release
+
+报告可以用 JSON / Markdown / CSV，不需要 pandas。
+
+---
+
+2. 核心功能设计
+
+建议分 5 个命令：
+
+```bash
+filepilot scan ./downloads --output files.json
+filepilot organize ./downloads --config rules.json --dry-run
+filepilot dedup ./photos --min-size 1MB --report dup.md
+filepilot logs ./logs --pattern "ERROR|WARN" --report log.md
+filepilot undo .filepilot/history.json
+```
+
+配置示例：
+
+```json
+{
+  "rules": [
+    {
+      "name": "图片",
+      "match": { "target": "name", "regex": "\\.(jpg|png|gif)$" },
+      "action": { "type": "move", "dest": "Images" }
+    },
+    {
+      "name": "日志",
+      "match": { "target": "name", "regex": "\\.log$" },
+      "action": { "type": "move", "dest": "Logs" }
+    }
+  ]
+}
+```
+
+关键原则：默认 dry-run，不真正移动；删除文件先移到 .trash，支持 undo。
+
+---
+
+3. 推荐目录结构
+
+```text
+filepilot/
+  filepilot/
+    __init__.py
+    __main__.py
+    cli.py
+    models.py
+    exceptions.py
+    scanner.py
+    rules.py
+    actions.py
+    duplicate.py
+    log_analyzer.py
+    reporters.py
+    history.py
+    utils/
+      decorators.py
+      concurrency.py
+  tests/
+    test_rules.py
+    test_duplicate.py
+    test_log_analyzer.py
+  examples/
+    rules.json
+    sample.log
+  README.md
+  pyproject.toml
+  .gitignore
+  LICENSE
+```
+
+类设计可以这样想：
+
+· FileItem：路径、大小、扩展名、修改时间、哈希
+· Rule：抽象基类，match(file_item) -> bool
+· Action：抽象基类，execute(file_item) -> None
+· MoveAction / RenameAction / CopyAction
+· Scanner：负责扫描
+· DuplicateFinder：大小分组 + 哈希
+· LogAnalyzer：正则解析日志
+· Reporter：输出 JSON / Markdown
+· History：记录操作，用于 undo
+
+---
+
+4. 开发路线图
+
+建议不要一次做完，按版本推进：
+
+v0.1 CLI + 扫描
+
+· argparse 或 click，建议先用标准库 argparse
+· pathlib 递归扫描
+· 跳过隐藏目录、符号链接
+· 权限错误不崩溃，收集到错误列表
+· 输出 files.json
+· 练：OOP、文件操作、异常处理
+
+v0.2 规则引擎 + 整理
+
+· JSON 配置读取
+· 正则匹配文件名
+· Rule 抽象基类 + Action 策略模式
+· 闭包做 make_regex_filter(pattern)
+· dry-run、操作历史、undo
+· 练：OOP、正则、闭包、文件操作
+
+v0.3 重复文件检测 + 并发
+
+· 先按大小分组
+· 再用 hashlib 分块哈希
+· 扫描用 ThreadPoolExecutor
+· 哈希用 ProcessPoolExecutor
+· 练：线程、进程、异常、大文件处理
+
+v0.4 日志分析 + 协程
+
+· asyncio.Queue 生产者消费者
+· 同步文件读取用 asyncio.to_thread
+· 正则解析日志级别、时间、消息
+· 输出 Markdown / JSON 报告
+· 练：协程、正则、异常、文件操作
+
+v1.0 优化与发布
+
+· 类型注解
+· logging
+· 单元测试
+· GitHub Actions
+· README、示例、Release
+
+---
+
+5. 用 AI 的正确方式
+
+你的思路很好，但建议加一个规则：先自己写接口和伪代码，再问 AI 思路，最后让 AI 只做 review。
+
+问 AI 时不要问“帮我写完整代码”，而是问：
+
+· “用 pathlib 递归扫描时，如何跳过隐藏目录并收集权限错误？”
+· “ThreadPoolExecutor 和 ProcessPoolExecutor 在这个场景怎么选？”
+· “asyncio.Queue 生产者消费者如何优雅停止？”
+· “这个正则 .*(ERROR|WARN).* 会不会有回溯风险？”
+· “请只指出我这段代码的边界条件、异常处理和并发安全问题，不要重写。”
+
+Claude 和 DeepSeek 可以当两个 reviewer。一个偏架构，一个偏细节。对比它们意见，自己取舍，然后跑测试验证。
+
+---
+
+6. GitHub 发布清单
+
+· 仓库名：filepilot 或 py-file-butler
+· README.md：安装、用法、配置、示例、架构、知识点
+· LICENSE：MIT
+· .gitignore：Python 标准
+· examples/rules.json、examples/sample.log
+· tests/：至少覆盖规则匹配、重复检测、日志解析
+· GitHub Actions：pytest + ruff
+· Release：v1.0.0
+· 不要提交缓存、临时文件、虚拟环境、密钥
+
+---
+
+7. 注意事项
+
+· 所有写操作默认 --dry-run
+· 删除不要直接删，先移到 .trash
+· 并发不要共享可变状态，用队列或锁
+· 正则预编译，避免灾难回溯
+· Windows 下进程池要加 if __name__ == "__main__":
+· 协程里不要直接做阻塞 IO，用 asyncio.to_thread
+· 大文件哈希必须分块读
+
+这个项目做完，你会同时拥有：一个能写进简历的 CLI 工具、一套完整的 Python 工程实践、以及一个持续可迭代的 GitHub 仓库。
+
+下一步我可以帮你把 FilePilot 的 README 大纲和每个模块的类/函数签名列出来，仍然只给设计，不写实现。
