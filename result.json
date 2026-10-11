@@ -1,0 +1,24 @@
+{
+  "metadata": {
+    "tool": "filepilot",
+    "version": "0.2.0",
+    "scan_time": "2026-09-19T18:49:03.694337"
+  },
+  "summary": {
+    "root": "D:\\photo",
+    "file_count": 1,
+    "total_size": 241884,
+    "error_count": 0
+  },
+  "files": [
+    {
+      "path": "D:\\photo\\asen.jpg",
+      "absolute_path": "D:\\photo\\asen.jpg",
+      "name": "asen.jpg",
+      "size": 241884,
+      "extension": ".jpg",
+      "modified_time": "2026-09-11T23:48:38.552436"
+    }
+  ],
+  "errors": []
+}

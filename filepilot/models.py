@@ -1,8 +1,10 @@
 # 数据模型
+import re
 from dataclasses import dataclass
 from pathlib import Path
 import json
 from datetime import datetime
+from typing import Callable
 
 @dataclass
 class FileItem:
@@ -51,9 +53,28 @@ class FileItem:
             size /= 1024
         return f"{size:.1f}TB"
 
-# 测试
+def load_config(config_path: str) -> dict:
+    """读取 JSON 配置，规则校验由规则引擎完成。"""
+    with open(config_path, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+def save_config(config_path:str, config:dict) -> None:
+    # 将字典写入json文件
+    with open(config_path, "w",encoding='utf-8') as f:
+        json.dump(config, f,ensure_ascii=False,indent=2)
+
+def make_regex_filter(pattern: str) -> Callable[[str], bool]:
+    """返回一个只匹配文件名的正则闭包。"""
+    regex = re.compile(pattern)
+
+    def filter_func(filename: str) -> bool:
+        return regex.search(filename) is not None
+
+    return filter_func
+
+# # 测试
 # if __name__ == "__main__":
-#     p = Path("D:\photo\微信图片_20260911234809_1_32.jpg")
+#     p = Path(r"D:\photo\asen.jpg")
 #     item = FileItem.from_path(p)
 #     print(item)
 #     print(item.to_dict())

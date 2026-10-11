@@ -1,0 +1,17 @@
+{
+  "rules": [
+    {
+      "pattern": ".*\\.tmp$",
+      "action": "delete",
+      "params": {}
+    },
+    {
+      "pattern": "^IMG_\\d{4}\\.(jpg|png)$",
+      "action": "move",
+      "params": {
+        "target_dir": "./images"
+      }
+    }
+  ],
+  "new_key": "新值"
+}

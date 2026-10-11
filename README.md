@@ -1,353 +1,169 @@
 # FilePilot
 
-## 📄 License
+FilePilot 是一个使用 Python 标准库编写的本地文件整理 CLI 工具。它按照 JSON 规则匹配文件名，预览或执行移动、删除操作，并保存操作历史，方便之后撤销。
 
-本项目基于 MIT License 发布。详见 [LICENSE](LICENSE)。
+当前版本：`v0.2.0`。
 
-> 一个用 Python 标准库手敲出来的本地文件整理、扫描与日志分析 CLI 工具。  
-> v0.1.0 先完成最小闭环：**扫描目录 → 收集文件信息 → 输出 JSON**。
+## 这个项目有什么用
 
-![Version](https://img.shields.io/badge/version-v0.1.0-blue)
-![Python](https://img.shields.io/badge/python-3.10%2B-3776AB)
-![License](https://img.shields.io/badge/license-MIT-green)
-![Tests](https://img.shields.io/badge/tests-34%20passed%20%7C%201%20skipped-brightgreen)
-![Status](https://img.shields.io/badge/status-early%20preview-orange)
+当下载目录、临时文件目录或照片目录越来越乱时，可以把整理规则写成配置文件，让 FilePilot 自动完成重复性的文件操作：
 
----
+- 用正则表达式匹配文件名；
+- 按规则移动文件到目标目录；
+- 将删除操作先移动到 `.filepilot_trash`，而不是直接永久删除；
+- 默认使用 dry-run，只展示计划，不修改文件；
+- 使用操作历史恢复已经执行的移动或删除；
+- 用 `scan` 先生成目录清单，检查扫描结果。
 
-## 📌 项目简介
+项目也演示了抽象基类、策略模式、闭包、JSON 配置、异常处理和可测试的文件操作流程。
 
-FilePilot 是一个学习驱动、逐步迭代的 Python 实战项目。
+## 安装
 
-它不是一下子做成“大而全”的工具，而是按照版本推进：
-
-- **v0.1.0**：目录扫描 + 文件信息收集 + JSON 输出
-- **v0.2.0**：规则引擎 + 文件整理 + dry-run + undo
-- **v0.3.0**：重复文件检测 + 线程 / 进程并发
-- **v0.4.0**：日志分析 + 协程 + 报告生成
-- **v1.0.0**：测试、CI、打包、发布
-
-当前版本是 **v0.1.0**，开发时间：**2026.09.14 - 2026.09.16**。
-
----
-
-## ✨ v0.1.0 特性
-
-- [x] 递归扫描指定目录（`os.walk` 生成器，不一次性载入内存）
-- [x] 默认跳过隐藏文件和隐藏目录（Windows 下同时识别“隐藏”属性，跨平台识别 `.` 前缀）
-- [x] `--include-hidden` / `--no-skip-hidden` 扫描隐藏内容
-- [x] `--follow-symlinks` 控制是否跟随符号链接（默认跳过）
-- [x] `--max-depth` 限制扫描深度
-- [x] 收集文件信息：路径、绝对路径、名称、后缀、大小、修改时间
-- [x] 读取 / 权限错误不崩溃，统一记录到 `errors`；无法进入的目录也会被收集
-- [x] 输出 JSON（缩进 + `ensure_ascii=False`）；`-o` 写文件（父目录自动创建），否则打印到 stdout
-- [x] `-v / --verbose` 打印扫描统计
-- [x] `--version` 输出版本号，提供清晰退出码
-
-> v0.1.0 不包含：正则规则、文件移动、删除、去重、线程、进程、协程、undo。  
-> 这些会在后续版本逐步加入。
-
----
-
-## 🚀 快速开始
-
-### 环境要求
-
-- Python 3.10+（`scanner.py` 使用了 `int | None` 写法）
-- 无第三方依赖，纯标准库实现（跑测试用 `unittest` 即可，`pytest` 可选）
-
-### 克隆项目
+需要 Python 3.10 或更高版本，不依赖第三方库：
 
 ```bash
 git clone https://github.com/WileDogUnderTheTree/filepilot.git
 cd filepilot
-```
-
-### 直接运行
-
-```bash
-python -m filepilot scan . --output files.json
-```
-
-如果你已经配置了 `pyproject.toml`，也可以：
-
-```bash
 pip install -e .
-filepilot scan . --output files.json
 ```
 
----
-
-## 🧭 命令用法
+不安装也可以在项目根目录运行：
 
 ```bash
-python -m filepilot scan <directory> [options]
 python -m filepilot --version
 ```
 
-### 参数说明
+## 怎么操作
 
-| 参数 | 说明 | 默认值 |
-|---|---|---|
-| `directory` | 要扫描的目录 | 必填 |
-| `-o, --output` | JSON 输出文件路径（父目录不存在会自动创建） | 不传则打印到 stdout |
-| `--no-skip-hidden` | 不跳过隐藏文件 / 隐藏目录 | 关闭（即默认跳过） |
-| `--include-hidden` | 同上，别名 | 关闭 |
-| `--follow-symlinks` | 跟随符号链接 | 关闭（即默认跳过符号链接） |
-| `--max-depth N` | 最大扫描深度，根目录深度为 0 | 不限 |
-| `-v, --verbose` | 打印“扫描完成：N 个文件，M 个错误” | 关闭 |
-| `--version` | 打印 `filepilot 0.1.0` | — |
-| `-h, --help` | 帮助信息 | — |
-
-> `-v` 既可写在子命令前（`filepilot -v scan .`），也可写在子命令后（`filepilot scan . -v`）。
-
-### 示例
+### 1. 先扫描目录
 
 ```bash
-# 扫描当前目录，JSON 打印到 stdout
-python -m filepilot scan .
-
-# 指定输出文件（嵌套目录会自动创建）
 python -m filepilot scan ./downloads -o reports/files.json -v
-
-# 包含隐藏文件和隐藏目录
-python -m filepilot scan . --include-hidden
-
-# 只扫描顶层
-python -m filepilot scan . --max-depth 1
-
-# 跟随符号链接
-python -m filepilot scan . --follow-symlinks
 ```
 
----
+默认跳过隐藏文件和隐藏目录。需要包含隐藏内容时使用：
 
-## 📤 输出示例
+```bash
+python -m filepilot scan ./downloads --include-hidden
+```
+
+`scan` 输出包含 `files`、`summary` 和 `errors` 的 JSON 报告；使用 `-o` 时会自动创建父目录。
+
+### 2. 编写规则
+
+规则按顺序匹配，每个文件只执行第一条匹配成功的规则：
 
 ```json
 {
-  "metadata": {
-    "tool": "filepilot",
-    "version": "0.1.0",
-    "scan_time": "2026-09-16T20:14:14.370367"
-  },
-  "summary": {
-    "root": "D:\\FilePilot CLI\\filepilot",
-    "file_count": 3,
-    "total_size": 9421,
-    "error_count": 1
-  },
-  "files": [
+  "rules": [
     {
-      "path": "D:\\FilePilot CLI\\filepilot\\cli.py",
-      "absolute_path": "D:\\FilePilot CLI\\filepilot\\cli.py",
-      "name": "cli.py",
-      "size": 5673,
-      "extension": ".py",
-      "modified_time": "2026-09-16T20:14:14.367846"
-    }
-  ],
-  "errors": [
+      "pattern": "\\.(jpg|jpeg|png)$",
+      "action": "move",
+      "params": {"target_dir": "./整理后/图片"}
+    },
     {
-      "path": "D:\\FilePilot CLI\\private",
-      "error_type": "access",
-      "message": "[WinError 5] 拒绝访问。"
+      "pattern": "\\.tmp$",
+      "action": "delete",
+      "params": {"trash_dir": "./.filepilot_trash"}
     }
   ]
 }
 ```
 
-- `summary.root` / `files[].path`：传入什么路径就原样输出（相对路径不会被强制转绝对路径）
-- `files[].extension`：后缀统一小写；无后缀或 `.` 开头的隐藏文件为 `""`
-- `files[].modified_time`：本地时间的 ISO 8601 字符串
-- `errors[].error_type`：`access`（权限 / 读取失败）或 `unknown`
+可用动作：
 
----
+- `move`：移动到 `target_dir`，目标目录不存在时自动创建；
+- `delete`：移动到 `trash_dir`，默认使用当前目录下的 `.filepilot_trash`；
+- `overwrite`：移动规则可在 `params` 中设置为 `true`，默认不覆盖已有文件。
 
-## 🚦 退出码
+正则表达式匹配的是文件名，例如 `photo.png`，不是完整路径。JSON 中的反斜杠需要写成 `\\`。
 
-| 退出码 | 含义 |
-|---|---|
-| `0` | 扫描成功，没有错误 |
-| `1` | 目录不存在 / 不是目录；或扫描过程中存在读取错误；或未提供子命令（打印帮助） |
-| `2` | 命令行参数错误（argparse 默认行为，例如未知参数） |
-| `130` | 用户 Ctrl+C 中断 |
-
-> 注意：**目录不存在返回 1**（不是 2），这一点由 `tests/test_cli.py::test_scan_command_not_found` 锁定。
-
----
-
-## 🗂️ 项目结构
-
-```text
-FilePilot CLI/
-├── filepilot/
-│   ├── __init__.py        # 版本与作者信息
-│   ├── __main__.py        # python -m filepilot 入口
-│   ├── cli.py             # argparse 解析 + scan 子命令 + JSON 输出
-│   ├── exceptions.py      # FilePilotError / DirectoryNotFoundError / FileAccessError / ScanError
-│   ├── models.py          # FileItem 数据类（from_path / to_dict / 大小格式化）
-│   └── scanner.py         # Scanner：遍历目录、跳过隐藏项、收集错误
-├── tests/
-│   ├── test_cli.py        # CLI 参数解析、scan 命令、保存文件
-│   ├── test_models.py     # FileItem 属性、扩展名、格式化
-│   ├── test_scanner.py    # 扫描、隐藏项、深度、权限、符号链接、性能
-│   ├── run_tests.py       # unittest 运行器（可只跑单个模块/用例）
-│   ├── smoke_e2e.py       # 端到端冒烟测试（真实调用 python -m filepilot）
-│   └── run_all_tests.ps1  # 一键跑 unittest + pytest + E2E
-├── docs/
-│   └── 题目.txt            # 项目需求与路线图
-├── pyproject.toml
-└── README.md
-```
-
-> 计划中但**尚未创建**：`LICENSE`、`.gitignore`、`examples/`、`filepilot/utils/`、GitHub Actions。  
-> 这些属于 v1.0.0 的发布清单，先不写进“已完成”。
-
----
-
-## 🧱 设计概览
-
-v0.1.0 的核心链路非常短：
-
-```text
-CLI（argparse） → Scanner → FileItem → dict → JSON（stdout / 文件）
-```
-
-### 核心类
-
-| 类 | 职责 |
-|---|---|
-| `FileItem` | 描述单个文件：路径、大小、后缀、修改时间；`from_path()` 读 stat，`to_dict()` 供 JSON 序列化 |
-| `Scanner` | 递归遍历目录、跳过隐藏项 / 符号链接 / 超深目录，把读取失败收集进 `errors`，维护 `file_count` 与 `total_size` |
-| `ScanError` | 单条扫描错误：`path` / `error_type` / `message`，带 `to_dict()` 便于写 JSON |
-| `FilePilotError` | 项目基础异常（`DirectoryNotFoundError`、`FileAccessError` 等继承它） |
-
-### 设计原则
-
-- 默认安全：v0.1.0 只读，不修改任何文件
-- 错误可追踪：权限 / 读取问题不崩溃，统一写入 `errors`，并用退出码表达结果
-- 输出可消费：JSON 方便后续版本做规则引擎和报告
-- 纯标准库：降低依赖，专注 Python 基础
-
----
-
-## 🧪 测试与验证
-
-### 怎么跑
+### 3. 先 dry-run，再实际执行
 
 ```bash
-# 1) unittest：全部测试（零依赖）
-python tests/run_tests.py
+# 只显示计划，不改文件（默认行为）
+python -m filepilot organize ./downloads -c examples/rules.json
 
-# 也可以只跑某个模块 / 某个用例
-python tests/run_tests.py scanner
-python tests/run_tests.py test_models.TestFileItem.test_str_method
-
-# 2) pytest（如果装了）
-python -m pytest tests -q
-
-# 3) 端到端冒烟测试：真实调用 python -m filepilot，校验 JSON 契约与退出码
-python tests/smoke_e2e.py
-
-# 4) 一键跑上面全部（Windows PowerShell）
-powershell -ExecutionPolicy Bypass -File tests/run_all_tests.ps1
-#   想跳过 pytest：-SkipPytest
+# 真正执行，并保存历史
+python -m filepilot organize ./downloads \
+  --config examples/rules.json \
+  --apply \
+  --history .filepilot_history.json
 ```
 
-> `run_all_tests.ps1` 必须保存为 **UTF-8 with BOM**：Windows PowerShell 5.1 默认按 ANSI 读取 `.ps1`，
-> 没有 BOM 时中文会被误解码，直接抛 `ParserError`。
+执行输出中的状态含义：`PLANNED` 是预览，`EXECUTED` 是已完成，`SKIPPED` 是源文件不存在、目标已存在或目标冲突，`FAILED` 是操作失败。
 
-### 最近一次实测结果
+### 4. 撤销操作
 
-| 阶段 | 命令 | 结果 |
-|---|---|---|
-| 导入自检 | `python -c "import filepilot, filepilot.cli"` | ✅ `import ok, version 0.1.0` |
-| unittest | `python -m unittest discover tests -v` | ✅ `Ran 35 tests` → `OK (skipped=1)` |
-| pytest | `python -m pytest tests -q` | ✅ `34 passed, 1 skipped, 9 subtests passed` |
-| 端到端 | `python tests/smoke_e2e.py` | ✅ 10 项检查全部 PASS |
-| 一键脚本 | `tests/run_all_tests.ps1` | ✅ 退出码 0，输出“全部测试通过” |
+```bash
+# 撤销最近一条已执行操作
+python -m filepilot undo --history .filepilot_history.json
 
-唯一跳过的用例是 `test_scanner.py::test_symlinks`：Windows 创建符号链接需要开发者模式或管理员权限，
-拿不到权限时用例会 `skipTest`，不算失败。
+# 按倒序撤销所有已执行操作
+python -m filepilot undo --history .filepilot_history.json --all
+```
 
-### 本次修复记录（v0.1.0 从 14 failed / 6 errors 到全绿）
+撤销要求目标文件或回收站备份仍然存在，并且原始路径没有被新文件占用。
 
-| # | 问题 | 后果 |
-|---|---|---|
-| 1 | `scanner.py` 的 `return files` 缩进在 `for` 循环体内 | 只返回第一个文件，5 个扫描用例失败 |
-| 2 | `Scanner` 属性叫 `files_count`，测试与报告要 `file_count`；`get_report()` 缺 `error_count` | `KeyError: 'file_count'` |
-| 3 | Windows 隐藏判定只看文件属性，不认 `.` 前缀 | 隐藏文件被计入，7 变 8 |
-| 4 | 子解析器没定义 `--follow-symlinks` | `scan_command` 读 `args.follow_symlinks` 抛 `AttributeError` |
-| 5 | `-v` 只注册在主解析器 | `scan ./dir -v` 报 `unrecognized arguments`（退出码 2） |
-| 6 | `skip_hidden=args.no_skip_hidden` 逻辑写反 | `--no-skip-hidden` 反而跳过隐藏文件 |
-| 7 | 报告字段名 `files_count`、`errors` 直接用 `e.__dict__` | 与测试契约不符；`Path` 无法 JSON 序列化（潜在 `TypeError`） |
-| 8 | `save_to_file` 不创建父目录 | 保存到嵌套路径抛 `FileNotFoundError` |
-| 9 | `models.__str__` 没用格式化后的大小；`_format_size` 没做除法、格式多了空格 | `str(item)` 丢单位；`"0.0 B" != "0.0B"` |
-| 10 | `ScanError(error="access")` 关键字参数名写错 | 权限分支自身抛 `TypeError` |
-| 11 | 用 `Path.exists()/is_dir()` 做根目录校验 | stat 失败时直接抛 `PermissionError`，而不是收集错误 |
+## Python API 示例
 
-修复后：`unittest` 35 个用例全绿（1 个符号链接用例按平台跳过），`pytest` 34 passed，E2E 10 项全 PASS。
+除了 CLI，也可以在 Python 中直接使用规则和引擎：
 
----
+```python
+from filepilot.engine import run_engine
 
-## ⚠️ 已知限制
+records, history = run_engine(
+    root="./downloads",
+    config_path="./rules.json",
+    dry_run=True,                         # 先预览
+    history_file="./.filepilot_history.json",
+)
 
-- 仅支持 `scan` 命令；不会移动、重命名、复制或删除文件
-- 没有 `--pretty`：JSON 始终缩进输出
-- `-o` 没有默认文件名：不传 `-o` 时打印到 stdout
-- `FileItem` 不记录 `is_symlink` 与哈希（哈希属于 v0.3.0）
-- CLI 默认跳过符号链接（`--follow-symlinks` 才跟随）；直接使用 `Scanner` 类时默认值相反（`follow_symlinks=True`）
-- 隐藏文件识别：`.` 前缀全平台有效；Windows “隐藏”属性仅在 Windows 生效
-- 单线程 `os.walk`，超大目录性能一般
-- 仓库还没有 `LICENSE`、`.gitignore`、`examples/`、CI
-- JSON 输出尚未做 schema 版本管理
+for record in records:
+    print(record.status, record.source_path, record.target_path)
+```
 
----
+正则闭包可以单独使用：
 
-## 🛣️ Roadmap
+```python
+from filepilot.models import make_regex_filter
 
-| 版本 | 目标 | 主要知识点 |
-|---|---|---|
-| v0.1.0 | 扫描目录并输出 JSON | argparse、pathlib、os、json、dataclasses |
-| v0.2.0 | 规则引擎、整理、dry-run、undo | 面向对象、正则、闭包、文件操作 |
-| v0.3.0 | 重复文件检测、并发哈希 | 线程、进程、hashlib |
-| v0.4.0 | 日志分析、Markdown 报告 | asyncio、正则、异常处理 |
-| v1.0.0 | 测试、CI、打包、发布 | pytest、GitHub Actions、工程化 |
+is_image = make_regex_filter(r"\.(jpg|jpeg|png)$")
+assert is_image("holiday.jpg")
+assert not is_image("notes.txt")
+```
 
----
+## 项目结构
 
-## 🤝 贡献
+```text
+filepilot/
+├── actions.py     # MoveAction、DeleteAction、ActionRecord
+├── engine.py      # 读取配置、构建规则、组织执行流程
+├── executor.py    # 批量执行与目标冲突检测
+├── history.py     # 历史持久化与 undo
+├── models.py      # FileItem、JSON 配置、正则闭包
+├── rules.py       # Rule 抽象基类与 RegexRule
+├── scanner.py     # 目录扫描
+└── cli.py         # scan、organize、undo 命令
+```
 
-欢迎提 Issue、讨论设计或提交 PR。
+## 测试
 
-如果你想参与：
+```bash
+python -m unittest discover tests -v
+python -m pytest tests -q       # 已安装 pytest 时
+python tests/smoke_e2e.py
+```
 
-1. Fork 本仓库
-2. 创建分支：`git checkout -b feature/your-feature`
-3. 提交修改：`git commit -m "feat: add your feature"`
-4. 推送分支：`git push origin feature/your-feature`
-5. 打开 Pull Request
+测试重点覆盖扫描、规则匹配、dry-run、移动、删除恢复、历史文件、目标冲突和 CLI 退出码。
 
----
+## 注意事项
 
-## 📄 License
+- `organize` 默认是 dry-run；只有显式添加 `--apply` 才会修改文件。
+- 建议先备份重要目录，并先查看 dry-run 输出。
+- 相对的 `target_dir` 和 `trash_dir` 按启动命令时的当前工作目录解释。
+- `scan` 的退出码为 `0` 表示无扫描错误，`1` 表示目录或扫描存在问题；命令行参数错误由 `argparse` 返回 `2`。
 
-本项目基于 MIT License 发布（`LICENSE` 文件待 v1.0.0 发布时补充）。
+## 许可证
 
----
-
-## 🙏 致谢
-
-- Python 标准库
-- DeepSeek harness：辅助定位 v0.1.0 测试失败原因并做回归验证
-- Claude：辅助代码 review 与设计讨论
-- 所有正在从“学完基础”走向“真正做项目”的开发者
-
----
-
-## ⭐ 最后
-
-FilePilot 的目标不是一次性写完，而是把 Python 基础、面向对象、文件操作、正则、并发、异常处理和工程化实践，串成一个能持续迭代的真实项目。
-
-如果这个项目对你有帮助，欢迎点一个 Star。
+本项目基于 MIT License 发布，详见 [LICENSE](LICENSE)。

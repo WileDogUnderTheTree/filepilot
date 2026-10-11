@@ -6,8 +6,7 @@ import os
 import stat as stat_module
 import sys
 from pathlib import Path
-from typing import Iterator, List
-
+from typing import Generator, Union, List, Iterator
 from .exceptions import (
     DirectoryNotFoundError,
     FileAccessError,
@@ -43,12 +42,17 @@ class Scanner:
         self.skip_hidden = skip_hidden
         self.follow_symlinks = follow_symlinks
         self.max_depth = max_depth
+        if max_depth is not None and max_depth < 0:
+            raise ValueError("max_depth 不能小于 0")
         self.errors: List[ScanError] = []
         self.file_count = 0
         self.total_size = 0
 
     def scan(self) -> List[FileItem]:
         """执行扫描，返回文件列表（出错的文件记录到 errors，不中断扫描）"""
+        self.errors.clear()
+        self.file_count = 0
+        self.total_size = 0
         self._check_root()
 
         files: List[FileItem] = []
@@ -153,3 +157,16 @@ class Scanner:
             },
             "errors": [e.to_dict() for e in self.errors],
         }
+
+def scan_files(root_dir: Union[str, Path]) -> Generator[FileItem, None, None]:
+    """扫描指定目录，逐个产出 FileItem（生成器，节省内存）
+    :param root_dir: 要扫描的根文件夹路径
+    :yield: FileItem
+    """
+    root_dir = Path(root_dir)
+    if not root_dir.is_dir():
+        raise NotADirectoryError(f"目录不存在或不是文件夹：{root_dir}")
+
+    for file_path in root_dir.rglob("*"):
+        if file_path.is_file():
+            yield FileItem.from_path(file_path)

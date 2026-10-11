@@ -18,7 +18,7 @@ import tempfile
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-EXPECTED_VERSION = "0.1.0"
+EXPECTED_VERSION = "0.2.0"
 
 
 class CheckFailure(Exception):
